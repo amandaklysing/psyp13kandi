@@ -1,0 +1,268 @@
+---
+title: "GP. Assignment –The Covariance Matrix / Multidimensional Scaling PSYP14 (HT2020)"
+author: "Karima Kandi"
+date: "`r Sys.Date() # generates today's date`"
+output:
+  word_document: default
+  pdf_document: default
+  html_document:
+    df_print: paged
+indent: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r packages}
+#loading necessary packages
+suppressMessages(suppressWarnings(
+  library(psych, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(lsr, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(tidyverse, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(readr, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(sciplot, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(reshape2, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(MASS, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(smacof, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(lm.beta, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(gridExtra, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(magrittr, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(dplyr, quietly = TRUE, warn.conflicts = FALSE)))
+```
+
+### Assignment 1, part 1
+"Try writing a short R function to calculate a (Pearson) covariance matrix for the
+womenshealth.txt data set. Ideally, your function will accept any number of variables (> 2, no need to test for missing values) 
+and return a covariance matrix for the variables."
+
+
+
+Importing the data file and extracting relevant variables
+```{r data}
+womenshealth <- read.delim("C:/Users/am3451kl/Dropbox/PhD/Undervisning/Pedagogiskt stöd/womenshealth.txt", header = TRUE)
+sum(is.na(womenshealth))
+```
+Note, the dataset womenshealth includes 26 missing values.  
+To make calculations easier henceforth, I will only variables in columns 1-4. 
+
+```{r }
+womenshealth.short = womenshealth[1:4]
+
+view(womenshealth.short) 
+
+```
+
+### Writing function for calculation of covariance matrix
+
+Extracting variables into numeric vectors
+```{r }
+vec1 <- as.numeric(womenshealth.short$subno)
+vec2 <- as.numeric(womenshealth.short$timedrs)
+vec3 <- as.numeric(womenshealth.short$attdrug)
+vec4 <- as.numeric(womenshealth.short$atthouse)
+```
+
+Covariance matrix function for two numeric vectors
+
+```{r }
+my.cov <- function(vec1, vec2) {
+  covariance <- sum((vec1-mean(vec1))*(vec2-mean(vec2)))/(NROW(vec1)-1) 
+    return(covariance)
+}
+print(my.cov(vec1,vec2))
+```
+
+Double checking that my function provides the same answer as the function in base R
+
+```{r cov()}
+cov(vec1,vec2)
+```
+
+Conclusion: my covariance function returns the same answer as base R for the variables subno and timedrs. 
+
+### Write up in the style of a ? vignette
+
+Description
+
+my.cov(x,y) calculates the covariance matrix of two numeric vectors. 
+
+Arguments
+x a numeric vector
+y a numeric vector
+
+Values
+Returns the covariance matrix of x and y
+
+### Scaling covariance matrix into correlation
+
+"If you have computed the covariance matrix successfully, try taking a step further by writing
+another short function to scale the covariance matrix into correlation."
+
+Scaling covariance matrix to correlation matrix
+```{r correlation matrix}
+covariance <- my.cov(vec1,vec2)
+
+my.corr <- function(vec1,vec2) {
+  corr.calc <- covariance/(sd(vec1)*sd(vec2))
+  return(corr.calc)}
+
+
+print(my.corr(vec1, vec2))
+```
+
+
+Double checking that my function provides the same answer as the function in base R
+```{r cor()}
+print(cor(vec1, vec2))
+```
+
+Conclusion: my correlation function returns the same answer as base R for the variables subno and timedrs. 
+
+### Expansion of function for covariance matrix to accept all variables in womenshealth.short
+
+```{r }
+my.cov <- function(vec1, vec2, vec3, vec4) {
+  covariance12 <- sum((vec1-mean(vec1))*(vec2-mean(vec2)))/(NROW(vec1)-1)
+  covariance13 <- sum((vec1-mean(vec1))*(vec3-mean(vec3)))/(NROW(vec1)-1)
+  covariance14 <- sum((vec1-mean(vec1))*(vec4-mean(vec4)))/(NROW(vec1)-1)
+  covariance23 <- sum((vec2-mean(vec2))*(vec3-mean(vec3)))/(NROW(vec2)-1)
+  covariance24 <- sum((vec2-mean(vec2))*(vec4-mean(vec4)))/(NROW(vec2)-1)
+  covariance34 <- sum((vec3-mean(vec3))*(vec4-mean(vec4)))/(NROW(vec3)-1)
+  return(matrix(c(covariance12, covariance13, covariance14, covariance23, covariance24, covariance34), nrow = 6, ncol = 1))
+}
+
+(my.cov(vec1,vec2,vec3, vec4))
+
+```
+This is the covariance matrix for variables subno, timedrs, atthouse, attdrug. It is written in the order cov timedrs-subno, attdrug-subno, atthouse-subno, timedrs-attdrug, timedrs-atthouse.
+
+Double checking that my function provides the same answer as the function in base R
+
+```{r }
+cov(womenshealth.short, use = "pairwise.complete.obs")
+```
+
+Conclusion: my covariance function returns the same answer as base R for the variables subno,timedrs, attdrug, and atthouse. 
+
+### Scaling covariance matrix into correlation
+
+"If you have computed the covariance matrix successfully, try taking a step further by writing
+another short function to scale the covariance matrix into correlation."
+
+Scaling covariance matrix to correlation matrix (expand in the same pattern as my.cov function)
+```{r }
+covariance <- my.cov(vec1,vec2,vec3, vec4)
+
+
+#Fix this before next time (not working right now)
+my.corr <- function(vec1,vec2,vec3, vec4) {
+  corr.calc12 <- covariance/(sd(vec1)*sd(vec2))
+  corr.calc13 <- covariance/(sd(vec1)*sd(vec3))
+  corr.calc14 <- covariance/(sd(vec1)*sd(vec4))
+  corr.calc23 <- covariance/(sd(vec2)*sd(vec3))
+  corr.calc24 <- covariance/(sd(vec2)*sd(vec4))
+  corr.calc34 <- covariance/(sd(vec3)*sd(vec4))
+  return(matrix(c(corr.calc12, corr.calc13, corr.calc14, corr.calc23, corr.calc24, corr.calc34), nrow = 6, ncol = 1))}
+
+
+print(my.corr(vec1, vec2, vec3, vec4))
+```
+
+
+Double checking that my function provides the same answer as the function in base R
+```{r }
+print(cor(womenshealth.short, use = "pairwise.complete.obs"))
+```
+
+Conclusion: my correlation function returns the same answer as base R for the variables subno,timedrs, attdrug, and atthouse. 
+
+### Assignment 1, part 2: Non-metric multidimensional scaling
+
+"Following the procedures discussed by Everitt and Hothorn (2011), use multidimensional scaling to examine the students’ perceived dissimilarities between the nations."
+
+
+The dataset Nations represent ratings of global similarity of different pairs of nations, conducted by 18 students before 1970 on a scale from `1=very different' to `9=very similar'.
+```{r data2}
+Nations <- read.delim("C:/Users/am3451kl/Dropbox/PhD/Undervisning/Pedagogiskt stöd/Nations.txt")
+View(Nations)
+```
+
+Dissimilarity matrix
+```{r}
+#calculating dissimilarity ratings from the similarity ratings by inverting the scale
+Nat.D = sim2diss(Nations, method = 10) 
+
+print(Nat.D)
+```
+
+### Running non-metric multidimensional scaling
+
+```{r}
+#transforming dissimilarity ratings into a dissimilarity distance matrix
+Nat.Ddist <- as.dist(Nat.D)
+#running the actual multidimensional scaling
+(N.mds = isoMDS(Nat.Ddist))
+```
+
+According to the rule of thumb given in Everitt & Hothorn (2011, p.123) stress values ≥ 20%, poor, Stress = 10%, fair, Stress ≤ 5%, good, Stress = 0, perfect.The stress for this MDS solution is 18.86%, thus indicating fair to poor fit in 2 dimensions. 
+
+Running Shephard's plot to make sense of the stress value. 
+```{r}
+N.stress.mds <- Shepard(Nat.Ddist, N.mds$points)
+{plot(N.stress.mds, pch = ".")
+lines(N.stress.mds$x, N.stress.mds$yf, type = "S")
+}
+```
+
+Conclusion: Fair to poor, closer to poor fit, also indicated by Shephard's plot given the non-linear shape of the line and the distance of the data points from the line. 
+
+Plotting the two-dimensional MDS solution
+```{r}
+x2 <- N.mds$points[,1]
+y2 <- N.mds$points[,2]
+
+### Making a simple plot
+{plot(x2, y2, xlab = "Coordinate 1", 
+     ylab = "Coordinate 2", 
+     type = "n")
+text(x2, y2, 
+     labels = colnames(Nations), 
+     cex = 0.7)
+} 
+
+```
+
+### Analysis of coordinates in two-dimensions  
+The closest two nations in this plot are Yugoslavia and UdSSR, followed by the USA and Israel. Egypt and India also place rather close to each other. One interpretation could be that that the dimension on the x-axis represent similarity in terms of economic system with placements further to the left indicating a more communist economy, and placements further to the right indicate a more capitalist economy. The dimension on the y-axis on the other hand seem to represent similarity in terms of relationship to colonisation. Placements higher up on the y-axis include nations that have had colonies while placements lower down on the y-axis include nations that have been colonies. Note though that the fit of the model in two dimensions was only fair to poor. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
