@@ -1,0 +1,447 @@
+---
+title: "Regression models with fixed and random effects PSYP14 (HT2020) Assignment 2"
+author: "Karima Kandi"
+date: "`r Sys.Date() # generates today's date`"
+output:
+  word_document: default
+  pdf_document: default
+  html_document:
+    df_print: paged
+indent: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r packages}
+#loading necessary packages
+suppressMessages(suppressWarnings(
+  library(psych, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(lsr, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(tidyverse, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(readr, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(sciplot, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(reshape2, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(MASS, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(dplyr, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(smacof, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(lm.beta, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(gridExtra, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(magrittr, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(ggplot2, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(lmtest, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(car, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(sandwich, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(lmboot, quietly = TRUE, warn.conflicts = FALSE)))
+```
+
+## Assignment 2 
+
+### Research question 2
+
+Part 1: perform backwards regression on original data set, cleaned from NAs = data_ass1_clean adding new variables to used data set after checking them for outliers
+
+(Recreating the data vectors from the last R Markdown document)
+
+### Data management, data set 1
+
+```{r }
+data_sample_1 = read.csv("https://tinyurl.com/ha-dataset1")
+
+my.data <- data.frame(data_sample_1$age, data_sample_1$sex, data_sample_1$pain_cat, data_sample_1$pain,
+                      data_sample_1$mindfulness, data_sample_1$cortisol_serum, data_sample_1$cortisol_saliva,
+                      data_sample_1$ID, data_sample_1$STAI_trait, data_sample_1$weight,
+                      data_sample_1$IQ, data_sample_1$household_income, stringsAsFactors = TRUE)
+pain <- as.numeric(my.data$data_sample_1.pain)
+pain_cat <- as.numeric(my.data$data_sample_1.pain_cat)
+age <- as.numeric(my.data$data_sample_1.age)
+mindful<- my.data$data_sample_1.mindfulness
+cortisol_serum <- my.data$data_sample_1.cortisol_serum
+cortisol_saliva<- my.data$data_sample_1.cortisol_saliva
+sex <- data_sample_1$sex
+stai_trait <- data_sample_1$STAI_trait
+id <- my.data$data_sample_1.ID
+weight <- as.numeric(my.data$data_sample_1.weight)
+IQ <- as.numeric(my.data$data_sample_1.IQ)
+income <- as.numeric(my.data$data_sample_1.household_income)
+stai_clean<- na_if(stai_trait, 3.9)
+age_clean<- na_if(age, 444)
+```
+
+
+Data set with all relevant predictors to use in assignment 2 
+
+```{r data}
+data_set1 <- data.frame(pain, pain_cat, age_clean, mindful, cortisol_saliva,cortisol_serum, sex, stai_clean, id, weight, IQ, income)
+data_set1_clean <- na.omit(data_set1) #omitting NAs
+```
+
+### Data exploration for new variables
+
+```{r }
+summary(data_set1_clean)
+```
+
+Looking for outliers
+
+```{r }
+#histogram for weight
+hist(weight) 
+```
+
+One participant with higher weight than rest of sample, but within reason for weight as a variable.  
+Conclusion: keep all participants. 
+
+```{r}
+#histogram IQ
+hist(IQ) 
+```
+
+One participant has lower IQ than the rest, IQ = 49. Some IQ boundary values in use in research are: <70 = impairment, 100 = average intelligence, >120 = above average, >130 = gifted. If IQ 70 is boundary for impairment, then IQ 49 represents a rather severe impairment or a test error. Also participant with IQ 149 needs to be examined.
+
+Checking the relationship between IQ and pain in a scatterplot
+```{r}
+data_set1_clean %>% ggplot()+
+  aes(x = IQ, y = pain, label = id)+
+  geom_label() #id 47 has IQ = 49, id 157 has IQ = 149
+```
+```{r}
+data_set1_clean%>% slice(c(47,155)) #slicing participants with id 47 and 157 (row 47 and 155 due to NA exclusions)
+```
+
+Conclusion: With respect to lack of insight for the data collection process, I want to keep as much of the range from IQ as possible. Since both 49 and 149 are possible values for IQ both participants will be kept in this model. 
+
+```{r}
+#histogram for income (USD), month or year? Restricted description about income, but assuming it is monthly income from range of values reported 
+hist(income)
+```
+
+```{r}
+psych::describe(income) #minimum value is negative, is this due to participants not having an income, living on loans, coding error?
+```
+
+Conclusion: I am choosing to keep negative values to account for participants that may actually have a negative income.  
+
+### Creating regression model based on the other researcher's variables, from now on known as the initial model (named backcomparison_mod).   
+
+```{r}
+backcomparison_mod <- lm(pain~age_clean+sex+stai_clean+pain_cat+mindful+cortisol_serum+weight+IQ+ income, data_set1_clean)
+```
+
+### Leverage for the initial model 
+Leverage, looking for outliers among residuals that unduly influence the regression coefficients. Cook's distance examined for the backward model. 
+
+```{r}
+#According to cut off value >4/158 = 0.025 cases 114 (and now the highest), and 3 have high leverage that stick out. 103 named but not that deviant.
+backcomparison_mod %>% plot(which=4)
+```
+```{r}
+backcomparison_mod %>% plot(which=5) #looks fine
+```
+
+Slicing out the participants identified as having the highest leverage to see if they also had extreme values on any of the individual variables. 
+
+```{r}
+data_set1_clean%>% slice(c(117,114, 103))
+```
+
+Conclusion: These participants were not the people on the edges of the IQ scale, so this is support for keeping all IQ values in the dataset. These participant were not the ones with negative income, so this is support for keeping all income values in the dataset. Leave all participants in because there are no indications of inplausible data/all points looked to be probable data and none had very high undue influence.
+
+### Regression assumption checks for the initial model 
+
+#### Normality of residuals for the initial model 
+```{r}
+backcomparison_mod%>% plot(which=2) #shows normality of residuals
+```
+```{r}
+hist(backcomparison_mod$residuals) #acceptably normal distribution
+```
+```{r}
+psych::describe(residuals(backcomparison_mod)) #skew = -0.08, kurtosis = -0.4, no changeworthy values 
+```
+
+Conclusion: Model passes checks for normality of residuals 
+
+#### Linearity: Residual plot 
+
+```{r}
+residualPlots(model = backcomparison_mod) #no large deviations from linearity
+```
+
+Conclusion: Linearity for residuals looks fine, Tukey is not significant and plots look fine. 
+
+
+#### Checking the homoscedasticity assumption for the initial model: heteroscedasticity tests
+
+```{r}
+plot(backcomparison_mod, which = 3) #no visible heteroscedasticity
+```
+
+```{r}
+ncvTest(backcomparison_mod) #non-significant test, no heteroscedasticity indicated
+```
+
+```{r}
+#breusch test
+bptest(backcomparison_mod) #non-significant test, no heteroscedasticity indicated
+```
+
+Conclusion: no heteroscedasticity detected 
+
+#### Multicollinearity test for the initial model
+
+```{r}
+vif(backcomparison_mod) #no vifs > 3
+```
+
+Conclusion: no multicollinearity detected.
+
+Conclusion from all assumption checks: initial model passes assumption checks for the backwards comparison regression
+
+### First backward regression model to determine elimination of variables 
+
+Backward elimination regression using step function
+
+```{r}
+step(object = backcomparison_mod, direction = "backward") 
+```
+
+#### Running individual regression models to ensure that the recommendations for variable elimination from the backward elimination regression are the optimal eliminations for model fitting.
+
+Initial recommendations:  
+Step 1 says to remove IQ, weight, STAI, sex. Step 2 says to remove weight, STAI, sex. Step 3 say to remove STAI, sex. Step 4 removes only STAI, and then it is no longer recommended to remove sex. Model thus indicates that sex+income+mindful+age+pain_cat+cortisol_serum is the optimal fit. 
+
+Step 1: remove IQ 
+
+```{r}
+backcomparison_mod_noIQ <- lm(pain~age_clean+sex+stai_clean+pain_cat+mindful+cortisol_serum+weight+ income, data_set1_clean)
+step(object = backcomparison_mod_noIQ, direction = "backward") 
+```
+
+Step 2: remove IQ and weight
+
+```{r}
+backcomparison_mod_noweight_noIQ <- lm(pain~age_clean+sex+stai_clean+pain_cat+mindful+cortisol_serum+ income, data_set1_clean)
+step(object = backcomparison_mod_noweight_noIQ, direction = "backward")
+```
+
+Step 3: remove IQ, weight, and STAI
+
+```{r}
+backcomparison_mod_noweight_noIQ_noSTAI <- lm(pain~age_clean+sex+pain_cat+mindful+cortisol_serum+ income, data_set1_clean)
+step(object = backcomparison_mod_noweight_noIQ_noSTAI , direction = "backward")
+```
+
+Conclusion: Model indicates that enough predictors have now been eliminated. Running the next step to ensure that this is correct.
+
+
+Step 4: remove IQ, weight, STAI, and sex
+
+```{r}
+backcomparison_mod_noweight_noIQ_noSTAI_nosex <- lm(pain~age_clean+pain_cat+mindful+cortisol_serum+ income, data_set1_clean)
+step(object = backcomparison_mod_noweight_noIQ_noSTAI_nosex, direction = "backward") 
+```
+
+Tested all possible stepwise regressions. AIC indicates that the model with sex+income+mindful+age+pain_cat+cortisol_serum (backcomparison_mod_noweight_noIQ_noSTAI) is the best. This model will be compared the theory based model (mod.saliv). 
+
+### Model comparison
+
+Renaming the final backward model to final.backward.mod and examining model test statistics. 
+
+```{r}
+final.backward.mod <- backcomparison_mod_noweight_noIQ_noSTAI
+summary(final.backward.mod)
+```
+
+Test statistics for the initial model (model submitted to backward regression)
+
+```{r}
+summary(backcomparison_mod)
+```
+
+
+#### Model comparison using AIC for the backward model and the initial model 
+
+AIC for the backward model 
+```{r}
+AIC(final.backward.mod)
+```
+
+AIC for the initial model 
+```{r}
+AIC(backcomparison_mod)
+```
+
+Conclusion: The AIC for the initial model before backwards regression is the highest. 
+
+Model comparison of initial model and backward model using anova
+
+```{r}
+anova(final.backward.mod, backcomparison_mod)
+```
+
+Conclusion: The initial model does not explain significantly more variance than the backward model.  
+Both AIC and anova indicate that the backward model is preferable. 
+
+### Model comparison for the backward model and the theory based model using AIC values 
+
+Renaming the theory based model and examining model test statistics. 
+
+```{r}
+#just re-running the first model to keep it in this markdown document
+data_ass1 <- data.frame(pain, pain_cat, age_clean, mindful, cortisol_saliva,cortisol_serum, sex, stai_clean, id)
+data_ass1_clean <- na.omit(data_ass1)
+
+mod.saliv <- lm(pain~age_clean+sex+stai_clean+pain_cat+mindful+cortisol_saliva, data_ass1_clean) 
+theorybased.mod <- mod.saliv #renaming mod.saliv to theorybased.mod
+
+summary(theorybased.mod)
+```
+
+AIC for the theory based model 
+```{r}
+AIC(theorybased.mod)
+```
+
+```{r}
+AIC(final.backward.mod)
+```
+
+
+Conclusion: Model comparison between the backward model and the theory based model using AIC shows that the final backward model has the smallest value. Model comparison using anova not appropriate given non-nested models. 
+
+### Model test statistics 
+Model statistics from ANOVA/summary  
+
+backcomparison_mod adjusted R^2 value = 0.47, F(9,148) = 16.71, p < .001.  
+
+final.backward.mod adjusted R^2 value = 0.48, F(6,151) = 25.27, p < .001.  
+
+theorybased.mod adjusted R^2 value = 0.48, F(6,151) = 25.09, p < .001 
+
+### Regression results table for the backward model
+```{r}
+coef_table = function(model){	
+  require(lm.beta)	
+  mod_sum = summary(model)	
+  mod_sum_p_values = as.character(round(mod_sum$coefficients[,4], 3))		
+  mod_sum_p_values[mod_sum_p_values != "0" & mod_sum_p_values != "1"] = substr(mod_sum_p_values[mod_sum_p_values != "0" & mod_sum_p_values != "1"], 2, nchar(mod_sum_p_values[mod_sum_p_values != "0" & mod_sum_p_values != "1"]))		
+  mod_sum_p_values[mod_sum_p_values == "0"] = "<.001"		
+  
+  
+  mod_sum_table = cbind(as.data.frame(round(cbind(coef(model), confint(model), c(0, lm.beta(model)$standardized.coefficients[c(2:length(model$coefficients))])), 2)), mod_sum_p_values)		
+  names(mod_sum_table) = c("b", "95%CI lb", "95%CI ub", "Std.Beta", "p-value")		
+  mod_sum_table["(Intercept)","Std.Beta"] = "0"		
+  return(mod_sum_table)	
+}	
+
+coef_table(final.backward.mod)
+```
+Note: Due to rounding, the coefficient for income does not show up in this table. The coefficient for income is 0.000006, it is small due one unit change representing only 1 USD
+
+Conclusion: When considering the statistical model comparison, the backward model seems to perform better in AIC and slightly better in its adjusted R^2: thus confirming the other researcher's claim that the backwards model explains slightly more variance in postoperative pain. 
+
+However, since model comparison using hierarchical regression between the final backward model and the theory based model wasn't appropriate (due to them not being nested) we cannot definitely determine which is more effective in predicting pain from this dataset as we would have liked. That said, it remains that, if given a choice the backward model performs slightly better based on R^2 and AIC value. Yet, the theory-based model has the advantage of being based on theoretical variables previously identified as important and meaningful when predicting postoperative pain. Since the explanatory value of the different models will differ when applied on different samples; that is, if we want to use the models on new data, we need to apply the existing models' predictions in a new data set and therefor explore the comparison further in this regard too.
+
+
+### Assignment 2, Part 2: Testing the models on a new dataset  
+
+Importing new dataset to test both models on 
+```{r}
+data_sample_2 = read.csv("https://tinyurl.com/ha-dataset2")
+```
+
+For predictions of postoperative pain in the new data set (data_sample_2), the following two regression equations will be used:  
+
+Regression equation for the backward model 
+𝑌 = 1.95 + (-0.04 * age_clean)  + (0.28 * sexmale) + (0.11 * pain_cat)+ (-0.26 * mindful)+ (0.52 * cortisol_serum)+ (0.000006 * income)
+
+Regression equation for the theory based model 
+𝑌 = 0.12 + (-0.01 * age_clean)  + (0.23 * sexmale) +(-0.04 * stai_clean) + (0.14 * pain_cat)+ (-0.23 * mindful)+ (0.62 * cortisol_saliva)
+
+Using the backwards model and the theory based model to predict pain values in the new dataset
+```{r}
+predictbackward <- predict(final.backward.mod, data_sample_2)
+predicttheory <- predict(theorybased.mod, data_sample_2)
+```
+
+#### Comparing the predicted values from the backward model to the actual pain values in the new dataset using the residual sum of squares
+Calculating residual sum of squares for the backward model in the new dataset
+```{r}
+rss.test.backward <- sum((data_sample_2$pain-predictbackward)^2, na.rm = TRUE)
+print(rss.test.backward)
+```
+
+#### Comparing the predicted values from the theory based model to the actual pain values in the new dataset using the residual sum of squares
+Calculating residual sum of squares for the theory based model in the new dataset
+```{r}
+rss.test.theory<- sum((data_sample_2$pain-predicttheory)^2, na.rm = TRUE)
+print(rss.test.theory)
+```
+
+#### Comparing variance explained by each model in the new dataset
+
+Calculating R^2 for the backward model in the new dataset
+```{r}
+## total sum of squares (difference for each participant from grand mean) calculated from intercept for backward model 
+mod.mean <- lm(pain~1,data = data_sample_2)
+tss <- sum((data_sample_2$pain-predict(mod.mean))^2)
+
+(Rsqr2 = 1 - (rss.test.backward/tss))
+```
+
+Calculating R^2 for the theory based model in the new dataset
+```{r}
+(Rsqr2 = 1 - (rss.test.theory/tss))
+```
+
+
+Reminder of the models' adjusted R^2 values from dataset 1 
+```{r}
+summary(final.backward.mod)$adj.r.squared
+```
+```{r}
+summary(theorybased.mod)$adj.r.squared
+```
+
+Conclusion: Looking first at residual sum of squares for both models on the new data set, the theory based model has lower residual errors than the backward model has. Looking instead at R^2 for both models on the new data set, the theory based model has better fit to new dataset, R^2 = 0.28 compared to R^2 = 0.25 for backward model. The theory based model thus explains around 3% more of the variance in postoperative pain in the new data set than the backward model does. R^2, compared to raw residual errors, also takes into account the variance between participants in the new data set and gives a more easily comparable value between models.
+
+### Summary
+
+For data set 1, the backward model explained around 0.2% more variance in postoperative pain than the theory based model did. However, in the new dataset, the theory based model explained around 3% more variance than the backward model did. This difference between data sets could be taken as a sign that basing a model on theory rather than data approaches appear more suitable for use on new data.  
+
+Arguably, we are likely seeing that the backward model perhaps is slight overfitted to data set 1 as well; making the theory based model more useful across datasets when predicting postoperative pain. This argument could be provided as a response to the researcher in the assignment who preferred the data based model. However, the value of the models should also be related to the intention of use. Say, I wanted to get the best fit to the specific clinical participants in sample 1, the backward model would arguably be better fitted to that data. However, if we are interested in assuring the best prediction performance across new patient groups for postoperative pain, the theory based model presents itself as more useful in that regard.
+
+#### Reporting regression equations
+
+Regression equation for backward model 
+𝑌 = 1.95 + (-0.04 * age_clean)  + (0.28 * sexmale) + (0.11 * pain_cat)+ (-0.26 * mindful)+ (0.52 * cortisol_serum)+ (0.000006 * income)
+
+Regression equation for theory based model 
+𝑌 = 0.12 + (-0.01 * age_clean)  + (0.23 * sexmale) +(-0.04 * stai_clean) + (0.14 * pain_cat)+ (-0.23 * mindful)+ (0.62 * cortisol_saliva)
+
+
+
+
+
+
+
+
+

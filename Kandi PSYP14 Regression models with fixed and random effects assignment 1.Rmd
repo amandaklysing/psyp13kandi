@@ -1,0 +1,495 @@
+---
+title: "Regression models with fixed and random effects PSYP14 (HT2020) Assignment 1"
+author: "Karima Kandi"
+date: "`r Sys.Date() # generates today's date`"
+output:
+  word_document: default
+  pdf_document: default
+  html_document:
+    df_print: paged
+indent: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Assignment 1 
+
+
+```{r packages}
+#loading necessary packages
+suppressMessages(suppressWarnings(
+  library(psych, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(lsr, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(tidyverse, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(readr, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(sciplot, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(reshape2, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(MASS, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(dplyr, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(smacof, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(lm.beta, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(gridExtra, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(magrittr, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(ggplot2, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(lmtest, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(car, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(sandwich, quietly = TRUE, warn.conflicts = FALSE)))
+suppressMessages(suppressWarnings(
+  library(lmboot, quietly = TRUE, warn.conflicts = FALSE)))
+```
+
+
+#### Research question 1
+
+Conduct a hierarchical regression to compare two models predicting postoperative pain. Model 1 uses age and sex as predictors, while model 2 uses age, sex, STAI, pain catastrophizing, mindfulness, and cortisol measures.
+
+```{r data}
+data_sample_1 = read.csv("https://tinyurl.com/ha-dataset1")
+
+view(data_sample_1) #to check is all is ok
+
+```
+
+Data management 
+
+```{r }
+###data management
+
+#age, sex, stai_trait, pain_cat, mindfulness, cortisol_serum, cortisol_saliva, pain
+#create dataset with correct variables
+my.data <- data.frame(data_sample_1$age, data_sample_1$sex, data_sample_1$pain_cat, data_sample_1$pain,
+                      data_sample_1$mindfulness, data_sample_1$cortisol_serum, data_sample_1$cortisol_saliva,
+                      data_sample_1$ID, data_sample_1$STAI_trait, stringsAsFactors = TRUE)
+
+#high values indicate high postoperative pain
+pain <- as.numeric(my.data$data_sample_1.pain) #range 0-10
+
+#high values indicate high pain catastrophizing
+pain_cat <- as.numeric(my.data$data_sample_1.pain_cat) #range 0-52
+
+age <- as.numeric(my.data$data_sample_1.age)
+
+#high values indicate higher dispositional mindfulness
+mindful<- my.data$data_sample_1.mindfulness #1-6
+
+cortisol_serum <- my.data$data_sample_1.cortisol_serum
+cortisol_saliva<- my.data$data_sample_1.cortisol_saliva
+sex <- data_sample_1$sex
+
+#High values indicate high trait anxiety
+stai_trait <- data_sample_1$STAI_trait #range 20-80
+
+id <- my.data$data_sample_1.ID
+```
+
+
+```{r }
+###Data exploration
+summary(my.data)
+```
+
+Looking for outliers
+```{r}
+#outlier search
+#histogram show value under minimum (20)
+hist(stai_trait) #range 20-80
+```
+```{r}
+#finding row number for stai outlier
+my.data[my.data$data_sample_1.STAI_trait <20,]
+```
+```{r}
+#setting stai outlier to NA
+stai_clean<- na_if(stai_trait, 3.9)
+#new histogram for stai, clean variable
+hist(stai_clean)
+```
+```{r}
+#histogram showed an age outlier
+hist(age)
+```
+```{r}
+#finding row number for age outlier
+my.data[my.data$data_sample_1.age==444,]
+```
+```{r}
+#setting age outlier to NA
+age_clean<- na_if(age, 444)
+
+#new histogram for age, clean variable
+hist(age_clean) #min 27, max 53
+```
+```{r}
+hist(pain) #range 0-10, normal
+```
+```{r}
+hist(pain_cat) #range 0-52, normal
+```
+```{r}
+hist(mindful)#range 1-6, normal
+```
+```{r}
+hist(cortisol_serum) #min 1.92 max 8.14
+#overall normal, some smaller values compared by overall distribution 
+```
+```{r}
+hist(cortisol_saliva)#min 1.85, max 17.49, normal
+```
+
+```{r}
+#new dataset with clean variables
+data_ass1 <- data.frame(pain, pain_cat, age_clean, mindful, cortisol_saliva,cortisol_serum, sex, stai_clean, id)
+
+#diagnostic 1: univariate outlier check
+data_ass1 %>% ggplot()+
+  aes(x = age_clean, y = pain, label = id)+
+  geom_label() #id 100 sticks out slightly
+```
+```{r}
+data_ass1 %>% ggplot()+
+  aes(x = sex, y = pain, label = id)+
+  geom_label() #id 100 and 141 sticks out slightly
+```
+```{r}
+data_ass1 %>% ggplot()+
+  aes(x = stai_clean, y = pain, label = id)+
+  geom_label()#id 100 sticks out a bit on the scale of pain (high), 114 sticks out a bit on the scale of pain (low for stai value)
+```
+```{r}
+data_ass1 %>% ggplot()+
+  aes(x = pain_cat, y = pain, label = id)+
+  geom_label() #looks good
+```
+```{r}
+data_ass1 %>% ggplot()+
+  aes(x = mindful, y = pain, label = id)+
+  geom_label() #looks good
+```
+```{r}
+data_ass1 %>% ggplot()+
+  aes(x = cortisol_saliva, y = pain, label = id)+
+  geom_label() #looks good
+```
+```{r}
+data_ass1 %>% ggplot()+
+  aes(x = cortisol_serum, y = pain, label = id)+
+  geom_label() #looks good 
+```
+
+### Regression models and assumption checks 
+
+```{r}
+#omitting 2 participants with missing values, to ensure same number of observations in both models
+data_ass1_clean <- na.omit(data_ass1)
+
+#build regression models
+mod.1 <- lm(pain ~ age_clean+sex, data_ass1_clean) #Model from previous research
+mod.2 <- lm(pain~age_clean+sex+stai_clean+pain_cat+mindful+cortisol_saliva+cortisol_serum, data_ass1_clean) #Zoltan's suggested model
+```
+
+### Model diagnostics before I look at the results of each regression model
+
+Leverage: looking for outliers among residuals that unduly influence the regression coefficients. Cut off values to look for are determined by the formula 4/N. 
+
+```{r}
+#cook's distance examined for model 1. According to cut off value >4/158 = 0.025 cases 100, 128, and 141 have high leverage. 
+mod.1 %>% plot(which=4)
+```
+
+```{r}
+mod.1 %>% plot(which=5)
+```
+Looking at the data for participants with higher leverage. 
+```{r}
+data_ass1_clean%>% slice(c(100,128,141))
+```
+Conclusion for model 1: Noticed that the values on other predictors seem reasonable for these outliers, so I decided to leave participants in. Considered also the rule of thumb for Cook's distance values below 1, and no values were above 1. 
+
+```{r}
+#cook's distance examined for model 2. According to cut off value >4/158 = 0.025 cases 114, 100, 68 have high leverage. 
+mod.2 %>% plot(which=4) 
+```
+```{r}
+mod.2 %>% plot(which=5) 
+```
+Looking at the data for participants with higher leverage. 
+
+```{r}
+data_ass1_clean%>% slice(c(114, 100,68))
+```
+Conclusion for model 2: Noticed that the values on other predictors seem reasonable for these outliers, so I decided to leave participants in. Considered also the rule of thumb for Cook's distance values below 1, and no values were above 1. 
+
+### Checking assumptions of linear regression for both models.
+
+Step 1: normality 
+```{r}
+#Model 1 
+mod.1%>% plot(which=2) #shows normality of residuals, 100 deviate from the line at the top
+```
+```{r}
+#Model 1
+hist(mod.1$residuals) #acceptably normal distribution
+```
+```{r}
+#Model 1
+psych::describe(residuals(mod.1)) #skew = 0.18, kurtosis = -0.04, no noticably large values
+```
+```{r}
+#Model 1, confidence intervals for predictors in model 1 with 95% significance level
+confint(mod.1, level = 0.95)
+```
+Restrictive confidence interval for regression estimated that take into account the small deviations in normality for residuals. Comparing it to 0.95 confidence intervals. 
+```{r}
+#Model 1, confidence intervals for predictors in model 1 with 99% significance level
+confint(mod.1, level = 0.99)
+```
+No large differences between 0.95 and 0.99 level confidence intervals, 0.99 could be considered for reporting.  
+
+```{r}
+#Model 2
+mod.2%>% plot(which=2) #shows normality of residuals, 114, 26, 148 deviate from the line at the bottom
+```
+```{r}
+#Model 2
+hist(mod.2$residuals) #acceptably normal distribution
+```
+```{r}
+#Model 2
+psych::describe(residuals(mod.2)) #skew = -0.12, kurtosis = -0.42, no noticably large values
+```
+Restrictive confidence interval for regression estimated that take into account the small deviations in normality for residuals. Comparing it to 0.95 confidence intervals. 
+```{r}
+#Model 2, confidence intervals for predictors in model 1 with 95% significance level
+confint(mod.2, level = 0.95)
+```
+```{r}
+#Model 2, confidence intervals for predictors in model 1 with 99% significance level
+confint(mod.2, level = 0.99)
+```
+No large differences between 0.95 and 0.99 level confidence intervals,  0.99 could be considered 
+
+Conclusion for model 1 and 2: Both models pass checks for normality of residuals 
+
+### Step 2: linearity
+
+Residual plot for model 1
+```{r}
+residualPlots(model = mod.1) #no large deviations from linearity
+```
+Residual plot for model 2
+```{r}
+residualPlots(model = mod.2) #no large deviations from linearity 
+```
+Conclusion for model 1 and 2: Both models pass checks for linearity for residuals.
+
+### Step 3: Homoscedasticity
+Heteroscedasticity tests for model 1
+```{r}
+plot(mod.1, which = 3) #no visible heteroscedasticity
+```
+```{r}
+ncvTest(mod.1) #non-significant test, no heteroscedasticity indicated
+```
+```{r}
+#breusch test
+bptest(mod.1) #non-significant test, no heteroscedasticity indicated
+```
+Heteroscedasticity tests for model 2
+```{r}
+plot(mod.2, which = 3) #no visible heteroscedasticity
+```
+```{r}
+ncvTest(mod.2) #non-significant test, no heteroscedasticity indicated
+```
+```{r}
+#breusch test
+bptest(mod.2) #non-significant test, no heteroscedasticity indicated
+```
+
+### Step 4: Multicollinearity
+Multicollinearity test for model 1
+```{r}
+vif(mod.1) #no vifs > 3
+```
+Multicollinearity test for model 2
+```{r}
+vif(mod.2) #vifs for cortisol_saliva and cortisol_serum >3. The two cortisol measures correlate, not strange.
+```
+
+Correlation matrix plot to check correlation between predictors in model 2, specifically cortisol_saliva and cortisol_serum
+```{r}
+(plotcor <- data_ass1_clean %>% dplyr::select(pain, age_clean, sex, stai_clean, pain_cat, mindful, cortisol_saliva, cortisol_serum) %>% pairs.panels(col = "red", lm = T))
+```
+The two cortisol measures correlate at r = 0.89, which is a very high correlation. 
+
+Comparing models with both cortisol measures versus only unique measures 
+```{r}
+#looking at adjusted R^2 for mod.2, and relation between cortisol measures as predictors. When we have both of the cortisol measures as predictors, none of them are significant. 
+summary(mod.2)
+```
+When we have both of the cortisol measures as predictors, none of them are significant. The full model has adjusted R^2 of 0.48. Let's compare with running summary for models with only cortisol_saliva and cortisol_serum as unique predictors. 
+```{r}
+#cortisol serum as predictor
+mod.serum <- lm(pain~age_clean+sex+stai_clean+pain_cat+mindful+cortisol_serum, data_ass1_clean)
+summary(mod.serum)
+```
+```{r}
+#cortisol saliva as predictor
+mod.saliv <- lm(pain~age_clean+sex+stai_clean+pain_cat+mindful+cortisol_saliva, data_ass1_clean)
+summary(mod.saliv)
+```
+
+Conclusion: Adjusted R^2 for model with cortisol saliva performs close to model with cortisol serum. 
+
+```{r}
+#looking at collinearity of serum model, no issues
+vif(mod.serum) #vif < 3
+```
+```{r}
+#looking at collinearity of saliva model, no issues 
+vif(mod.saliv) #vif < 3
+```
+
+### Model comparison using AIC between model with both cortisol measures, model with only saliva, and model with only serum. 
+
+```{r}
+AIC(mod.2, mod.saliv, mod.serum)
+```
+Conclusion: AIC value for model with cortisol saliva is lower than more model with cortisol serum, as well as for the full model. 
+
+Multicollinearity in full model (mod.2) results in neither of the cortisol measures being a significant predictor of pain. When I seperate the two cortisol measures, I can see that cortisol is a significant predictor for pain using either measure when they are in different models. But, cortisol saliva results in a slightly higher R^2 and lower AIC: so for future model comparisons, only cortisol saliva will be used as a predictor.
+
+### Revisit diagnostics for mod.saliv
+
+Diagnostics for mod.saliv  (collinearity already checked)
+Normality of residuals:
+```{r}
+mod.saliv%>% plot(which=2) #shows normality of residuals, 100 deviate from the line at the top, same participant as for mod.2 
+```
+```{r}
+hist(mod.saliv$residuals) #acceptably normal distribution, some skew towards the negative but not large 
+```
+```{r}
+psych::describe(residuals(mod.saliv)) #skew = -0.13, kurtosis = -0.43, no noticably large values. A bit larger than for mod.2 but not concerning. 
+```
+
+Linearity
+Residual plot for mod.saliv
+```{r}
+residualPlots(model = mod.saliv) #no large deviations from linearity 
+```
+Linearity for residuals looks fine
+
+Linearity for residuals looks fine for mod.saliv, only minor changes compared to mod.2 
+
+Homoscedascicity
+Heteroscedasticity tests for mod.saliv
+
+```{r}
+plot(mod.saliv, which = 3) #no visible heteroscedasticity
+```
+```{r}
+ncvTest(mod.saliv) #non-significant test, no heteroscedasticity indicated
+```
+```{r}
+#breusch test
+bptest(mod.saliv) #non-significant test, no heteroscedasticity indicated
+```
+
+Diagnostics finished. Mod.saliv passes assumption checks.  
+
+### Model comparison, between mod.1:mod.saliv and mod.1:mod.2 (to confirm choice of predictor removal in mod.saliv)
+
+AIC approach
+```{r}
+AIC(mod.1, mod.2, mod.saliv)
+```
+AIC supports using mod.2 over mod.1, and model that contains cortisol measured using saliva has slightly lower AIC than full model. 
+
+Conclusion from AIC approach: Although mod 2 and mod.saliva explained quite similar levels of variance in the outcome variable (ca 48%) as determined by adjusted R squared, AIC indicates that using mod.saliva would be slightly preferable. Further, an additional added value is that mod-saliva also provides a more efficient model as it is built on a predictor less than in mod.2 whilst stll achieving almost the same Adjusted R^2 value.
+
+Hierarchical regression using ANOVA
+```{r}
+anova(mod.1, mod.saliv,mod.2 ) 
+```
+
+Nested model using cortisol saliva adds significantly more explained variance than model 1, but the full model does not add significantly more explained variance than the model with only cortisol_saliva. 
+
+### Model test statistics 
+Model statistics from ANOVA/summary  
+mod.1 adjusted R^2 value = 0.05, F(2,155) = 5.37, p = .006.  
+mod.saliv adjusted R^2 value = 0.48, F(6,151) = 25.09, p < .001 
+
+Loading custom function for regression results table
+```{r}
+coef_table = function(model){	
+  require(lm.beta)	
+  mod_sum = summary(model)	
+  mod_sum_p_values = as.character(round(mod_sum$coefficients[,4], 3))		
+  mod_sum_p_values[mod_sum_p_values != "0" & mod_sum_p_values != "1"] = substr(mod_sum_p_values[mod_sum_p_values != "0" & mod_sum_p_values != "1"], 2, nchar(mod_sum_p_values[mod_sum_p_values != "0" & mod_sum_p_values != "1"]))		
+  mod_sum_p_values[mod_sum_p_values == "0"] = "<.001"		
+  
+  
+  mod_sum_table = cbind(as.data.frame(round(cbind(coef(model), confint(model), c(0, lm.beta(model)$standardized.coefficients[c(2:length(model$coefficients))])), 2)), mod_sum_p_values)		
+  names(mod_sum_table) = c("b", "95%CI lb", "95%CI ub", "Std.Beta", "p-value")		
+  mod_sum_table["(Intercept)","Std.Beta"] = "0"		
+  return(mod_sum_table)	
+}
+```
+
+Regression results table for mod.1
+```{r}
+coef_table(mod.1)
+
+```
+Model interpretation for mod 1:  
+Age is a significant predictor of postoperative pain, such that one unit change (year) in age corresponds to a 0.08 unit decrease in postoperative pain. For the standardised coefficients, a one standard deviation change in age (5.03 years) predicts a decrease by 0.26 of a standard deviation in postoperative pain, which is 0.41 units (SD for pain = 1.56, multiply this with standardised beta to get change in actual units). The relationship predicts a decrease in pain as age increases. Patient gender was not a significant predictor of postoperative pain.  
+
+Regression results table for mod.saliv
+
+```{r}
+coef_table(mod.saliv)
+```
+Model interpretation for mod.saliv:
+
+Age, gender, and STAI were not significant predictors of postoperative pain in this model. Mindfulness approached significance, such that when mindfulness increases by one standard deviation, postoperative pain decreases by 0.13 of a standard deviation. Pain catastrophizing was a significant predictor of postoperative pain, such that when pain catastrophizing increases by one standard deviation, postoperative pain increases by 0.45 of a standard deviation. Cortisol (measured by saliva) was a significant predictor of postoperative pain, such that when cortisol increases by one standard deviation, postoperative pain increases by 0.40 of a standard deviation.  
+
+Further, the relationships for these predictors with the outcome variables fits the theory based indication provided in the assignment description. Pain catastrophizing and cortisol have a positive relationship with the outcome variable as indicated by theory. In addition, mindfulness (as verging on being significant) has a negative relationship with the outcome variable which matches theory that has shown it may be a protective factor for postoperative pain.
+
+#### Summary and answering the research question:
+
+Unlike previous studies and meta-analyses, age did not present itself as a statistically significant predictor of postoperative pain in the second model tested (mod.saliv) when psychological and hormonal predictors were added.
+
+Mod.2 and Mod.saliv performed quite closely on adjuster R^2 (ca 48% of the variance explained), yet indications were found in favor of mod.saliva on AIC. Mod.saliva also offers a model with fewer predictors.  
+In essence, the study indicates that by adding psychological and hormonal predictors to the prediction model of postoperative pain, the variance explained increases. The expanded models (mod.2 and mod.saliva) including psychological and hormonal values explained around 48% of the variance in postoperative pain, while Mod.1 only explained around 5% of the variance. Further, running the analysis has expanded our understanding that pain catastrophizing and cortisol (in saliva) statistically significant explains variance in postoperative pain, demonstrating a positive relationship with the outcome wherein high levels on these predictors can be expected to relate to high levels on post-operative pain. Statistically it demonstrates a value of considering these two predictors in particular for predicting postoperative pain. In addition to this, mindfulness is worth noting as approaching statistical significance. Concluding, however, adding psychological and hormonal predictors to the model appear to have expanded our understanding of more predictors of postoperative pain, indicated new understanding concerning age as a predictor and added clear value in explaining variance in the outcome variable when adding these to our prediction model. 
+
+
+Regression equation written out
+
+𝑌 = 0.12 + (-0.01 * age_clean)  + (0.23 * sexmale) +(-0.04 * stai_clean) + (0.14 * pain_cat)+ (-0.23 * mindful)+ (0.62 * cortisol_saliva)
+
+
+
+
+
+
+
+
+

@@ -48,8 +48,6 @@ suppressMessages(suppressWarnings(
 womenshealth.txt data set. Ideally, your function will accept any number of variables (> 2, no need to test for missing values) 
 and return a covariance matrix for the variables."
 
-
-
 Importing the data file and extracting relevant variables
 ```{r data}
 womenshealth <- read.delim("C:/Users/am3451kl/Dropbox/PhD/Undervisning/Pedagogiskt stöd/womenshealth.txt", header = TRUE)
@@ -75,14 +73,19 @@ vec3 <- as.numeric(womenshealth.short$attdrug)
 vec4 <- as.numeric(womenshealth.short$atthouse)
 ```
 
-Covariance matrix function for two numeric vectors
 
+
+Equation for calculating the covariance between x and y
+
+Covariance(x,y) = (1/N-1) × (Σ(x - $\bar{x}$) × (y - $\bar{y}$))
+
+#### Covariance matrix function for two numeric vectors
 ```{r }
-my.cov <- function(vec1, vec2) {
+my.cov1 <- function(vec1, vec2) {
   covariance <- sum((vec1-mean(vec1))*(vec2-mean(vec2)))/(NROW(vec1)-1) 
     return(covariance)
 }
-print(my.cov(vec1,vec2))
+print(my.cov1(vec1,vec2))
 ```
 
 Double checking that my function provides the same answer as the function in base R
@@ -111,16 +114,19 @@ Returns the covariance matrix of x and y
 "If you have computed the covariance matrix successfully, try taking a step further by writing
 another short function to scale the covariance matrix into correlation."
 
-Scaling covariance matrix to correlation matrix
-```{r correlation matrix}
-covariance <- my.cov(vec1,vec2)
 
-my.corr <- function(vec1,vec2) {
-  corr.calc <- covariance/(sd(vec1)*sd(vec2))
+Equation for calculating the correlation between x and y from the covariance of x and y
+
+Correlation(x,y) = covariancexy / (SDx × SDy) 
+
+```{r correlation matrix}
+
+my.corr1 <- function(vec1,vec2) {
+  corr.calc <- my.cov1(vec1,vec2)/(sd(vec1)*sd(vec2))
   return(corr.calc)}
 
 
-print(my.corr(vec1, vec2))
+print(my.corr1(vec1, vec2))
 ```
 
 
@@ -131,10 +137,10 @@ print(cor(vec1, vec2))
 
 Conclusion: my correlation function returns the same answer as base R for the variables subno and timedrs. 
 
-### Expansion of function for covariance matrix to accept all variables in womenshealth.short
+### Expansion of the function for covariance matrix to accept all variables in womenshealth.short
 
 ```{r }
-my.cov <- function(vec1, vec2, vec3, vec4) {
+my.cov2 <- function(vec1, vec2, vec3, vec4) {
   covariance12 <- sum((vec1-mean(vec1))*(vec2-mean(vec2)))/(NROW(vec1)-1)
   covariance13 <- sum((vec1-mean(vec1))*(vec3-mean(vec3)))/(NROW(vec1)-1)
   covariance14 <- sum((vec1-mean(vec1))*(vec4-mean(vec4)))/(NROW(vec1)-1)
@@ -144,7 +150,7 @@ my.cov <- function(vec1, vec2, vec3, vec4) {
   return(matrix(c(covariance12, covariance13, covariance14, covariance23, covariance24, covariance34), nrow = 6, ncol = 1))
 }
 
-(my.cov(vec1,vec2,vec3, vec4))
+(my.cov2(vec1,vec2,vec3, vec4))
 
 ```
 This is the covariance matrix for variables subno, timedrs, atthouse, attdrug. It is written in the order cov timedrs-subno, attdrug-subno, atthouse-subno, timedrs-attdrug, timedrs-atthouse.
@@ -157,28 +163,21 @@ cov(womenshealth.short, use = "pairwise.complete.obs")
 
 Conclusion: my covariance function returns the same answer as base R for the variables subno,timedrs, attdrug, and atthouse. 
 
-### Scaling covariance matrix into correlation
+### Scaling the expanded covariance matrix into a correlation matrix
 
-"If you have computed the covariance matrix successfully, try taking a step further by writing
-another short function to scale the covariance matrix into correlation."
-
-Scaling covariance matrix to correlation matrix (expand in the same pattern as my.cov function)
 ```{r }
-covariance <- my.cov(vec1,vec2,vec3, vec4)
-
-
 #Fix this before next time (not working right now)
-my.corr <- function(vec1,vec2,vec3, vec4) {
-  corr.calc12 <- covariance/(sd(vec1)*sd(vec2))
-  corr.calc13 <- covariance/(sd(vec1)*sd(vec3))
-  corr.calc14 <- covariance/(sd(vec1)*sd(vec4))
-  corr.calc23 <- covariance/(sd(vec2)*sd(vec3))
-  corr.calc24 <- covariance/(sd(vec2)*sd(vec4))
-  corr.calc34 <- covariance/(sd(vec3)*sd(vec4))
+my.corr2 <- function(vec1,vec2,vec3, vec4) {
+  corr.calc12 <- my.cov1(vec1, vec2)/(sd(vec1)*sd(vec2))
+  corr.calc13 <- my.cov1(vec1, vec3)/(sd(vec1)*sd(vec3))
+  corr.calc14 <- my.cov1(vec1, vec4)/(sd(vec1)*sd(vec4))
+  corr.calc23 <- my.cov1(vec2, vec3)/(sd(vec2)*sd(vec3))
+  corr.calc24 <- my.cov1(vec2, vec4)/(sd(vec2)*sd(vec4))
+  corr.calc34 <- my.cov1(vec3, vec4)/(sd(vec3)*sd(vec4))
   return(matrix(c(corr.calc12, corr.calc13, corr.calc14, corr.calc23, corr.calc24, corr.calc34), nrow = 6, ncol = 1))}
 
 
-print(my.corr(vec1, vec2, vec3, vec4))
+print(my.corr2(vec1, vec2, vec3, vec4))
 ```
 
 
